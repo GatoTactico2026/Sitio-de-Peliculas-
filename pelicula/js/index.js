@@ -12,6 +12,7 @@ async function loadMovies() {
                         <p><strong>Año:</strong> ${movie.year}</p>
                         <p><strong>Director:</strong> ${movie.director}</p>
                         ${movie.review ? `<p><strong>Reseña:</strong> ${movie.review}</p>` : ''}
+                        <a href="/movie/${movie._id}">Ver detalle</a>
                     </div>
                 `).join('') +
                 '</div>';

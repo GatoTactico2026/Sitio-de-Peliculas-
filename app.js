@@ -148,6 +148,57 @@ app.post("/movies/:id/delete", isLoggedIn, isAuthor, async (req, res) => {
 app.get("/", (req, res) =>
     res.sendFile(path.join(__dirname, "pelicula", "index.html")));
 
+// Página de detalle de película
+app.get("/movie/:id", async (req, res) => {
+    try {
+        const movie = await Movie.findById(req.params.id);
+
+        if (!movie) {
+            return res.status(404).send("Película no encontrada");
+        }
+
+        const escapeHtml = (value) => String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+
+        const actors = Array.isArray(movie.actors) && movie.actors.length
+            ? movie.actors.map(actor => escapeHtml(actor)).join(", ")
+            : "No registrados";
+
+        const imageHtml = movie.image
+            ? `<img src="${escapeHtml(movie.image)}" alt="${escapeHtml(movie.name)}" style="width: 100%; max-height: 450px; object-fit: cover; border-radius: 6px; margin-bottom: 15px;">`
+            : "";
+
+        res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalle de Película</title>
+</head>
+<body>
+    <h1>Detalle de la película</h1>
+    <a href="/">Volver al index</a>
+    <div style="margin-top: 20px;">
+        <div style="border: 1px solid #ccc; border-radius: 8px; padding: 20px; max-width: 700px;">
+            ${imageHtml}
+            <h2>${escapeHtml(movie.name || "Sin nombre")}</h2>
+            <p><strong>Año:</strong> ${escapeHtml(movie.year || "No disponible")}</p>
+            <p><strong>Director:</strong> ${escapeHtml(movie.director || "No disponible")}</p>
+            <p><strong>Reseña:</strong> ${escapeHtml(movie.review || "Sin reseña")}</p>
+            <p><strong>Actores:</strong> ${actors}</p>
+        </div>
+    </div>
+</body>
+</html>`);
+    } catch {
+        res.status(500).send("Error al cargar el detalle de la película");
+    }
+});
+
 // Formulario de registro
 app.get("/register", (req, res) =>
     res.sendFile(path.join(__dirname, "pelicula", "register.html")));
