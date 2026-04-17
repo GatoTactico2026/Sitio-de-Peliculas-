@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro</title>
+</head>
+
+<body>
+    <h1>Registro</h1>
+    <form action="/register" method="POST">
+        <input type="text" name="username" placeholder="Usuario" required>
+        <input type="text" name="name" placeholder="Nombre" required>
+        <input type="email" name="email" placeholder="Correo electrónico" required>
+        <input type="password" name="password" placeholder="Contraseña" required>
+        <button type="submit">Registrarse</button>
+    </form>
+    <p><a href="/login">Ir a iniciar sesión</a></p>
+    <p><a href="/">Volver al inicio</a></p>
+</body>
+
+</html>

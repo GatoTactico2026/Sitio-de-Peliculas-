@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agregar película</title>
+</head>
+
+<body>
+    <h1>Agregar película</h1>
+    <form id="movie-form">
+        <input type="text" name="name" placeholder="Nombre" required>
+        <input type="number" name="year" placeholder="Año" required>
+        <input type="text" name="director" placeholder="Director">
+        <textarea name="review" placeholder="Reseña"></textarea>
+        <input type="text" name="actors" placeholder="Actores (separados por comas)">
+        <input type="text" name="image" placeholder="URL de imagen (ej: https://...)">
+        <button type="submit">Guardar</button>
+    </form>
+    <p><a href="/movies">Volver a la lista</a></p>
+
+    <script src="/js/new.js"></script>
+</body>
+
+</html>
