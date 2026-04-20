@@ -1,4 +1,11 @@
 const movieId = window.location.pathname.split('/')[2];
+const movieForm = document.getElementById('movie-form');
+const deleteForm = document.getElementById('delete-form');
+
+movieForm.action = `/movies/${movieId}`;
+movieForm.method = 'POST';
+deleteForm.action = `/movies/${movieId}/delete`;
+deleteForm.method = 'POST';
 
 async function loadMovie() {
     try {
@@ -32,7 +39,7 @@ function validateForm(data) {
     return true;
 }
 
-document.getElementById('movie-form').addEventListener('submit', async (e) => {
+movieForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     const data = Object.fromEntries(formData);
@@ -54,7 +61,7 @@ document.getElementById('movie-form').addEventListener('submit', async (e) => {
     }
 });
 
-document.getElementById('delete-form').addEventListener('submit', async (e) => {
+deleteForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (confirm('¿Estás seguro de eliminar esta película?')) {
         try {

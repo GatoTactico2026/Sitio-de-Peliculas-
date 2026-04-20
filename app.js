@@ -62,12 +62,12 @@ app.get("/api/user", (req, res) => {
 const isLoggedIn = (req, res, next) =>
     req.isAuthenticated() ? next() : res.redirect("/login");
 
-// Verifica si el usuario es el autor de la película o admin
+// Verifica si el usuario es el autor de la película
 const isAuthor = async (req, res, next) => {
     try {
         const movie = await Movie.findById(req.params.id);
         if (!movie) return res.status(404).send("Película no encontrada");
-        if (!movie.author || movie.author.equals(req.user._id) || req.user?.role === 'admin')
+        if (movie.author && movie.author.equals(req.user._id))
             return next();
         res.status(403).send("No tienes permisos para modificar esta película");
     } catch {
@@ -94,8 +94,7 @@ app.get("/movies", isLoggedIn, async (req, res) => {
 
         const canEdit = (movie) => {
             if (!req.user) return false;
-            if (req.user.role === 'admin') return true;
-            if (!movie.author) return true;
+            if (!movie.author) return false;
             return String(movie.author) === String(req.user._id);
         };
 
@@ -207,6 +206,12 @@ app.get("/", async (req, res) => {
             .replace(/\"/g, "&quot;")
             .replace(/'/g, "&#39;");
 
+        const canEdit = (movie) => {
+            if (!req.user) return false;
+            if (!movie.author) return false;
+            return String(movie.author) === String(req.user._id);
+        };
+
         const recentMoviesHtml = movies.length
             ? `<div style="display: flex; flex-wrap: wrap; gap: 20px;">
                 ${movies.map(movie => `
@@ -217,6 +222,7 @@ app.get("/", async (req, res) => {
                         <p><strong>Director:</strong> ${escapeHtml(movie.director)}</p>
                         ${movie.review ? `<p><strong>Reseña:</strong> ${escapeHtml(movie.review)}</p>` : ''}
                         <p><a href="/movie/${movie._id}">Ver detalle</a></p>
+                        ${canEdit(movie) ? `<p><a href="/movies/${movie._id}/edit">Editar</a></p>` : ''}
                     </div>
                 `).join('')}
             </div>`

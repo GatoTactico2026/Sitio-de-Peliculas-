@@ -45,8 +45,7 @@ async function loadMovies() {
 
 function canEdit(movie) {
     if (!currentUser) return false;
-    if (currentUser.role === 'admin') return true;
-    if (!movie.author) return true; // Permitir editar si no hay autor (películas viejas)
+    if (!movie.author) return false;
     return currentUser._id === movie.author.toString();
 }
 

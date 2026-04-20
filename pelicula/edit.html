@@ -9,7 +9,7 @@
 
 <body>
     <h1>Editar película</h1>
-    <form id="movie-form">
+    <form id="movie-form" method="POST">
         <input type="text" name="name" placeholder="Nombre" required>
         <input type="number" name="year" placeholder="Año" required>
         <input type="text" name="director" placeholder="Director">
@@ -22,6 +22,7 @@
         <button type="submit" style="background-color: red; color: white;">Eliminar</button>
     </form>
     <p><a href="/movies">Volver a la lista</a></p>
+    <script src="/js/edit.js" defer></script>
 </body>
 
 </html>
