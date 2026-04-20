@@ -345,4 +345,6 @@ app.get("/logout", (req, res, next) => {
 });
 
 // 9. INICIAR SERVIDOR
-app.listen(3000, () => console.log("Servidor corriendo en el puerto 3000"));
+app.listen(8080, "0.0.0.0", () => {
+    console.log("Servidor corriendo en http://0.0.0.0:8080");
+});
