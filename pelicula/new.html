@@ -9,7 +9,7 @@
 
 <body>
     <h1>Agregar película</h1>
-    <form id="movie-form">
+    <form id="movie-form" action="/movies" method="POST">
         <input type="text" name="name" placeholder="Nombre" required>
         <input type="number" name="year" placeholder="Año" required>
         <input type="text" name="director" placeholder="Director">
@@ -19,8 +19,6 @@
         <button type="submit">Guardar</button>
     </form>
     <p><a href="/movies">Volver a la lista</a></p>
-
-    <script src="/js/new.js"></script>
 </body>
 
 </html>

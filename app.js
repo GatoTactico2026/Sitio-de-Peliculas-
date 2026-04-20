@@ -14,7 +14,7 @@ mongoose.connect("mongodb://127.0.0.1:27017/moviesDB")
 app.use(
     express.urlencoded({ extended: true }),  // Para leer datos de formularios
     express.json(),                          // Para leer JSON
-    express.static(path.join(__dirname, "pelicula")),  // Archivos HTML/CSS/JS
+    express.static(path.join(__dirname, "pelicula"), { index: false }),  // Archivos HTML/CSS/JS
     express.static(path.join(__dirname, "Imagenes"))   // Imágenes
 );
 
@@ -81,8 +81,59 @@ const validateReview = (review) =>
 
 // 7. RUTAS DE PELÍCULAS (páginas HTML)
 // Ver todas las películas
-app.get("/movies", isLoggedIn, (req, res) =>
-    res.sendFile(path.join(__dirname, "pelicula", "movies.html")));
+app.get("/movies", isLoggedIn, async (req, res) => {
+    try {
+        const movies = await Movie.find({});
+
+        const escapeHtml = (value) => String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+
+        const canEdit = (movie) => {
+            if (!req.user) return false;
+            if (req.user.role === 'admin') return true;
+            if (!movie.author) return true;
+            return String(movie.author) === String(req.user._id);
+        };
+
+        const moviesHtml = movies.length
+            ? movies.map(movie => `
+                <div style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; width: 250px; text-align: center;">
+                    ${movie.image ? `<img src="${escapeHtml(movie.image)}" alt="${escapeHtml(movie.name)}" style="width: 100%; height: 300px; object-fit: cover; border-radius: 5px; margin-bottom: 10px;">` : ''}
+                    <h3>${escapeHtml(movie.name)}</h3>
+                    <p><strong>Año:</strong> ${escapeHtml(movie.year)}</p>
+                    <p><strong>Director:</strong> ${escapeHtml(movie.director)}</p>
+                    ${movie.review ? `<p><strong>Reseña:</strong> ${escapeHtml(movie.review)}</p>` : ''}
+                    <p><a href="/movie/${movie._id}">Ver detalle</a></p>
+                    ${canEdit(movie) ? `<p><a href="/movies/${movie._id}/edit">Editar</a></p>` : ''}
+                </div>
+            `).join('')
+            : '<p>No hay películas disponibles.</p>';
+
+        res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Películas</title>
+</head>
+<body>
+    <h1>Películas</h1>
+    <a href="/">Volver al inicio</a>
+    <a href="/movies/new" style="margin-left: 10px;">Agregar película</a>
+    <a href="/logout" style="margin-left: 10px;">Cerrar sesión</a>
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px;">
+        ${moviesHtml}
+    </div>
+</body>
+</html>`);
+    } catch {
+        res.status(500).send("Error al cargar películas");
+    }
+});
 
 // Formulario para crear nueva película
 app.get("/movies/new", isLoggedIn, (req, res) =>
@@ -145,8 +196,68 @@ app.post("/movies/:id/delete", isLoggedIn, isAuthor, async (req, res) => {
 
 // 8. RUTAS DE AUTENTICACIÓN (registro, login, logout)
 // Página de inicio
-app.get("/", (req, res) =>
-    res.sendFile(path.join(__dirname, "pelicula", "index.html")));
+app.get("/", async (req, res) => {
+    try {
+        const movies = await Movie.find({}).sort({ _id: -1 }).limit(6);
+
+        const escapeHtml = (value) => String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+
+        const recentMoviesHtml = movies.length
+            ? `<div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                ${movies.map(movie => `
+                    <div style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; width: 250px; text-align: center;">
+                        ${movie.image ? `<img src="${escapeHtml(movie.image)}" alt="${escapeHtml(movie.name)}" style="width: 100%; height: 300px; object-fit: cover; border-radius: 5px; margin-bottom: 10px;">` : ''}
+                        <h3>${escapeHtml(movie.name)}</h3>
+                        <p><strong>Año:</strong> ${escapeHtml(movie.year)}</p>
+                        <p><strong>Director:</strong> ${escapeHtml(movie.director)}</p>
+                        ${movie.review ? `<p><strong>Reseña:</strong> ${escapeHtml(movie.review)}</p>` : ''}
+                        <p><a href="/movie/${movie._id}">Ver detalle</a></p>
+                    </div>
+                `).join('')}
+            </div>`
+            : '<p>No hay películas recientes.</p>';
+
+        const authLinks = req.user
+            ? `
+                <li><a href="/movies"> Ver todas las películas </a></li>
+                <li><a href="/movies/new"> Agregar película </a></li>
+                <li><a href="/logout"> Cerrar sesión </a></li>
+            `
+            : `
+                <li><a href="/register"> Registro </a></li>
+                <li><a href="/login"> Iniciar sesión </a></li>
+            `;
+
+        res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal de Noticias y Películas</title>
+</head>
+<body>
+    <h1>Bienvenido al Index</h1>
+    <p>Portal de Noticias y Películas</p>
+
+    <nav>
+        <ul>
+            ${authLinks}
+        </ul>
+    </nav>
+
+    <h2>Películas Recientes</h2>
+    ${recentMoviesHtml}
+</body>
+</html>`);
+    } catch {
+        res.status(500).send("Error al cargar el index");
+    }
+});
 
 // Página de detalle de película
 app.get("/movie/:id", async (req, res) => {
@@ -224,7 +335,7 @@ app.get("/login", (req, res) =>
 
 // Procesar login
 app.post("/login", passport.authenticate("local", {
-    successRedirect: "/movies",   // Si éxito, va a películas
+    successRedirect: "/",   // Si éxito, va al index
     failureRedirect: "/login"     // Si falla, vuelve a login
 }));
 

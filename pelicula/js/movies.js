@@ -16,7 +16,7 @@ async function loadMovies() {
         const movies = await response.json();
         const container = document.getElementById('movies-container');
         container.innerHTML = movies.map(movie => `
-            <div style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; width: 250px; text-align: center;">
+            <div data-movie-id="${movie._id}" style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; width: 250px; text-align: center; cursor: pointer;">
                 ${movie.image ? `<img src="${movie.image}" alt="${movie.name}" style="width: 100%; height: 300px; object-fit: cover; border-radius: 5px; margin-bottom: 10px;">` : ''}
                 <h3>${movie.name}</h3>
                 <p><strong>Año:</strong> ${movie.year}</p>
@@ -25,6 +25,19 @@ async function loadMovies() {
                 ${canEdit(movie) ? `<a href="/movies/${movie._id}/edit">Editar</a>` : ''}
             </div>
         `).join('');
+
+        container.querySelectorAll('[data-movie-id]').forEach(card => {
+            card.addEventListener('click', (event) => {
+                if (event.target.closest('a')) {
+                    return;
+                }
+
+                const movieId = card.getAttribute('data-movie-id');
+                if (movieId) {
+                    window.location.href = `/movie/${movieId}`;
+                }
+            });
+        });
     } catch (error) {
         console.error('Error loading movies:', error);
     }
