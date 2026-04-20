@@ -67,6 +67,7 @@ const isAuthor = async (req, res, next) => {
     try {
         const movie = await Movie.findById(req.params.id);
         if (!movie) return res.status(404).send("Película no encontrada");
+        if (req.user?.role === "admin") return next();
         if (movie.author && movie.author.equals(req.user._id))
             return next();
         res.status(403).send("No tienes permisos para modificar esta película");
@@ -79,11 +80,26 @@ const isAuthor = async (req, res, next) => {
 const validateReview = (review) =>
     !review || review.trim().split(/\s+/).length <= 100;
 
+// Escapa texto para usarlo como regex segura en búsquedas
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 // 7. RUTAS DE PELÍCULAS (páginas HTML)
 // Ver todas las películas
 app.get("/movies", isLoggedIn, async (req, res) => {
     try {
-        const movies = await Movie.find({});
+        const search = String(req.query.q ?? "").trim();
+        const searchFilter = search
+            ? {
+                $or: [
+                    { name: { $regex: escapeRegex(search), $options: "i" } },
+                    { director: { $regex: escapeRegex(search), $options: "i" } },
+                    { review: { $regex: escapeRegex(search), $options: "i" } },
+                    { actors: { $regex: escapeRegex(search), $options: "i" } }
+                ]
+            }
+            : {};
+
+        const movies = await Movie.find(searchFilter).sort({ _id: -1 });
 
         const escapeHtml = (value) => String(value ?? "")
             .replace(/&/g, "&amp;")
@@ -91,6 +107,13 @@ app.get("/movies", isLoggedIn, async (req, res) => {
             .replace(/>/g, "&gt;")
             .replace(/\"/g, "&quot;")
             .replace(/'/g, "&#39;");
+
+        const canManage = (movie) => {
+            if (!req.user) return false;
+            if (req.user.role === "admin") return true;
+            if (!movie.author) return false;
+            return String(movie.author) === String(req.user._id);
+        };
 
         const moviesHtml = movies.length
             ? movies.map(movie => `
@@ -101,9 +124,11 @@ app.get("/movies", isLoggedIn, async (req, res) => {
                     <p><strong>Director:</strong> ${escapeHtml(movie.director)}</p>
                     ${movie.review ? `<p><strong>Reseña:</strong> ${escapeHtml(movie.review)}</p>` : ''}
                     <p><a href="/movie/${movie._id}">Ver detalle</a></p>
+                    ${canManage(movie) ? `<p><a href="/movies/${movie._id}/edit">Editar</a></p>` : ''}
+                    ${canManage(movie) ? `<form action="/movies/${movie._id}/delete" method="POST" style="margin-top: 8px;"><button type="submit" style="background-color: red; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Eliminar</button></form>` : ''}
                 </div>
             `).join('')
-            : '<p>No hay películas disponibles.</p>';
+            : '<p>No se encontraron películas.</p>';
 
         res.send(`<!DOCTYPE html>
 <html lang="es">
@@ -118,6 +143,11 @@ app.get("/movies", isLoggedIn, async (req, res) => {
     <a href="/mis-peliculas" style="margin-left: 10px;">Mis películas</a>
     <a href="/movies/new" style="margin-left: 10px;">Agregar película</a>
     <a href="/logout" style="margin-left: 10px;">Cerrar sesión</a>
+    <form method="GET" action="/movies" style="margin-top: 15px;">
+        <input type="text" name="q" value="${escapeHtml(search)}" placeholder="Buscar por nombre, director, actor..." style="padding: 8px; width: 280px;">
+        <button type="submit" style="padding: 8px 12px;">Buscar</button>
+        ${search ? `<a href="/movies" style="margin-left: 8px;">Limpiar</a>` : ''}
+    </form>
     <div style="display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px;">
         ${moviesHtml}
     </div>
@@ -131,7 +161,25 @@ app.get("/movies", isLoggedIn, async (req, res) => {
 // Ver películas creadas por el usuario en sesión
 app.get("/mis-peliculas", isLoggedIn, async (req, res) => {
     try {
-        const movies = await Movie.find({ author: req.user._id }).sort({ _id: -1 });
+        const search = String(req.query.q ?? "").trim();
+        const searchFilter = search
+            ? {
+                $or: [
+                    { name: { $regex: escapeRegex(search), $options: "i" } },
+                    { director: { $regex: escapeRegex(search), $options: "i" } },
+                    { review: { $regex: escapeRegex(search), $options: "i" } },
+                    { actors: { $regex: escapeRegex(search), $options: "i" } }
+                ]
+            }
+            : {};
+
+        const moviesFilter = req.user?.role === "admin"
+            ? searchFilter
+            : (search
+                ? { $and: [{ author: req.user._id }, searchFilter] }
+                : { author: req.user._id });
+
+        const movies = await Movie.find(moviesFilter).sort({ _id: -1 });
 
         const escapeHtml = (value) => String(value ?? "")
             .replace(/&/g, "&amp;")
@@ -139,6 +187,13 @@ app.get("/mis-peliculas", isLoggedIn, async (req, res) => {
             .replace(/>/g, "&gt;")
             .replace(/\"/g, "&quot;")
             .replace(/'/g, "&#39;");
+
+        const canManage = (movie) => {
+            if (!req.user) return false;
+            if (req.user.role === "admin") return true;
+            if (!movie.author) return false;
+            return String(movie.author) === String(req.user._id);
+        };
 
         const myMoviesHtml = movies.length
             ? movies.map(movie => `
@@ -149,13 +204,11 @@ app.get("/mis-peliculas", isLoggedIn, async (req, res) => {
                     <p><strong>Director:</strong> ${escapeHtml(movie.director)}</p>
                     ${movie.review ? `<p><strong>Reseña:</strong> ${escapeHtml(movie.review)}</p>` : ''}
                     <p><a href="/movie/${movie._id}">Ver detalle</a></p>
-                    <p><a href="/movies/${movie._id}/edit">Editar</a></p>
-                    <form action="/movies/${movie._id}/delete" method="POST" style="margin-top: 8px;">
-                        <button type="submit" style="background-color: red; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Eliminar</button>
-                    </form>
+                    ${canManage(movie) ? `<p><a href="/movies/${movie._id}/edit">Editar</a></p>` : ''}
+                    ${canManage(movie) ? `<form action="/movies/${movie._id}/delete" method="POST" style="margin-top: 8px;"><button type="submit" style="background-color: red; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Eliminar</button></form>` : ''}
                 </div>
             `).join('')
-            : '<p>Aún no has agregado películas.</p>';
+            : '<p>No se encontraron películas.</p>';
 
         res.send(`<!DOCTYPE html>
 <html lang="es">
@@ -165,11 +218,16 @@ app.get("/mis-peliculas", isLoggedIn, async (req, res) => {
     <title>Mis películas</title>
 </head>
 <body>
-    <h1>Mis películas</h1>
+    <h1>${req.user?.role === "admin" ? "Gestión de películas (Admin)" : "Mis películas"}</h1>
     <a href="/">Volver al inicio</a>
     <a href="/movies" style="margin-left: 10px;">Ver todas</a>
     <a href="/movies/new" style="margin-left: 10px;">Agregar película</a>
     <a href="/logout" style="margin-left: 10px;">Cerrar sesión</a>
+    <form method="GET" action="/mis-peliculas" style="margin-top: 15px;">
+        <input type="text" name="q" value="${escapeHtml(search)}" placeholder="Buscar por nombre, director, actor..." style="padding: 8px; width: 280px;">
+        <button type="submit" style="padding: 8px 12px;">Buscar</button>
+        ${search ? `<a href="/mis-peliculas" style="margin-left: 8px;">Limpiar</a>` : ''}
+    </form>
     <div style="display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px;">
         ${myMoviesHtml}
     </div>
