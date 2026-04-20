@@ -92,12 +92,6 @@ app.get("/movies", isLoggedIn, async (req, res) => {
             .replace(/\"/g, "&quot;")
             .replace(/'/g, "&#39;");
 
-        const canEdit = (movie) => {
-            if (!req.user) return false;
-            if (!movie.author) return false;
-            return String(movie.author) === String(req.user._id);
-        };
-
         const moviesHtml = movies.length
             ? movies.map(movie => `
                 <div style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; width: 250px; text-align: center;">
@@ -107,7 +101,6 @@ app.get("/movies", isLoggedIn, async (req, res) => {
                     <p><strong>Director:</strong> ${escapeHtml(movie.director)}</p>
                     ${movie.review ? `<p><strong>Reseña:</strong> ${escapeHtml(movie.review)}</p>` : ''}
                     <p><a href="/movie/${movie._id}">Ver detalle</a></p>
-                    ${canEdit(movie) ? `<p><a href="/movies/${movie._id}/edit">Editar</a></p>` : ''}
                 </div>
             `).join('')
             : '<p>No hay películas disponibles.</p>';
@@ -122,6 +115,7 @@ app.get("/movies", isLoggedIn, async (req, res) => {
 <body>
     <h1>Películas</h1>
     <a href="/">Volver al inicio</a>
+    <a href="/mis-peliculas" style="margin-left: 10px;">Mis películas</a>
     <a href="/movies/new" style="margin-left: 10px;">Agregar película</a>
     <a href="/logout" style="margin-left: 10px;">Cerrar sesión</a>
     <div style="display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px;">
@@ -131,6 +125,58 @@ app.get("/movies", isLoggedIn, async (req, res) => {
 </html>`);
     } catch {
         res.status(500).send("Error al cargar películas");
+    }
+});
+
+// Ver películas creadas por el usuario en sesión
+app.get("/mis-peliculas", isLoggedIn, async (req, res) => {
+    try {
+        const movies = await Movie.find({ author: req.user._id }).sort({ _id: -1 });
+
+        const escapeHtml = (value) => String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+
+        const myMoviesHtml = movies.length
+            ? movies.map(movie => `
+                <div style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; width: 260px; text-align: center;">
+                    ${movie.image ? `<img src="${escapeHtml(movie.image)}" alt="${escapeHtml(movie.name)}" style="width: 100%; height: 300px; object-fit: cover; border-radius: 5px; margin-bottom: 10px;">` : ''}
+                    <h3>${escapeHtml(movie.name)}</h3>
+                    <p><strong>Año:</strong> ${escapeHtml(movie.year)}</p>
+                    <p><strong>Director:</strong> ${escapeHtml(movie.director)}</p>
+                    ${movie.review ? `<p><strong>Reseña:</strong> ${escapeHtml(movie.review)}</p>` : ''}
+                    <p><a href="/movie/${movie._id}">Ver detalle</a></p>
+                    <p><a href="/movies/${movie._id}/edit">Editar</a></p>
+                    <form action="/movies/${movie._id}/delete" method="POST" style="margin-top: 8px;">
+                        <button type="submit" style="background-color: red; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Eliminar</button>
+                    </form>
+                </div>
+            `).join('')
+            : '<p>Aún no has agregado películas.</p>';
+
+        res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mis películas</title>
+</head>
+<body>
+    <h1>Mis películas</h1>
+    <a href="/">Volver al inicio</a>
+    <a href="/movies" style="margin-left: 10px;">Ver todas</a>
+    <a href="/movies/new" style="margin-left: 10px;">Agregar película</a>
+    <a href="/logout" style="margin-left: 10px;">Cerrar sesión</a>
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px;">
+        ${myMoviesHtml}
+    </div>
+</body>
+</html>`);
+    } catch {
+        res.status(500).send("Error al cargar tus películas");
     }
 });
 
@@ -206,12 +252,6 @@ app.get("/", async (req, res) => {
             .replace(/\"/g, "&quot;")
             .replace(/'/g, "&#39;");
 
-        const canEdit = (movie) => {
-            if (!req.user) return false;
-            if (!movie.author) return false;
-            return String(movie.author) === String(req.user._id);
-        };
-
         const recentMoviesHtml = movies.length
             ? `<div style="display: flex; flex-wrap: wrap; gap: 20px;">
                 ${movies.map(movie => `
@@ -222,7 +262,6 @@ app.get("/", async (req, res) => {
                         <p><strong>Director:</strong> ${escapeHtml(movie.director)}</p>
                         ${movie.review ? `<p><strong>Reseña:</strong> ${escapeHtml(movie.review)}</p>` : ''}
                         <p><a href="/movie/${movie._id}">Ver detalle</a></p>
-                        ${canEdit(movie) ? `<p><a href="/movies/${movie._id}/edit">Editar</a></p>` : ''}
                     </div>
                 `).join('')}
             </div>`
@@ -231,6 +270,7 @@ app.get("/", async (req, res) => {
         const authLinks = req.user
             ? `
                 <li><a href="/movies"> Ver todas las películas </a></li>
+                <li><a href="/mis-peliculas"> Mis películas </a></li>
                 <li><a href="/movies/new"> Agregar película </a></li>
                 <li><a href="/logout"> Cerrar sesión </a></li>
             `
