@@ -1,454 +1,138 @@
-// 1. IMPORTACIONES (todo en una línea)
-const express = require("express"), mongoose = require("mongoose"), passport = require("passport"),
-    LocalStrategy = require('passport-local').Strategy, session = require("express-session"),
-    path = require("path");
+const express = require("express"), mongoose = require("mongoose"),
+    passport = require("passport"), LocalStrategy = require("passport-local").Strategy,
+    session = require("express-session"), path = require("path");
 const User = require("./Model/user"), Movie = require("./Model/movie");
 const app = express();
 
-// 2. CONEXIÓN A MONGODB
-mongoose.connect("mongodb://127.0.0.1:27017/moviesDB")
-    .then(() => console.log("Conectado a MongoDB"))
-    .catch(err => console.log("Error de conexión:", err));
+mongoose.connect("mongodb://127.0.0.1:27017/moviesDB").catch(console.error);
 
-// 3. MIDDLEWARES (todos combinados en un solo app.use)
 app.use(
-    express.urlencoded({ extended: true }),  // Para leer datos de formularios
-    express.json(),                          // Para leer JSON
-    express.static(path.join(__dirname, "pelicula"), { index: false }),  // Archivos HTML/CSS/JS
-    express.static(path.join(__dirname, "Imagenes"))   // Imágenes
-);
-
-// 4. SESIONES Y PASSPORT (autenticación)
-app.use(
+    express.urlencoded({ extended: true }), express.json(),
+    express.static(path.join(__dirname, "pelicula"), { index: false }),
+    express.static(path.join(__dirname, "Imagenes")),
     session({ secret: "Rusty is a dog", resave: false, saveUninitialized: false }),
-    passport.initialize(),    // Iniciar Passport
-    passport.session()        // Usar sesiones
+    passport.initialize(), passport.session()
 );
 
-// Configuración de la estrategia local de autenticación
 passport.use(new LocalStrategy(User.authenticate()));
-passport.serializeUser(User.serializeUser());   // Cómo guardar usuario en sesión
-passport.deserializeUser(User.deserializeUser()); // Cómo recuperar usuario
-
-// Variable global para usar el usuario en las vistas
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 app.use((req, res, next) => { res.locals.currentUser = req.user; next(); });
 
-// 5. APIs (devuelven JSON)
-// Obtener todas las películas
-app.get("/api/movies", async (req, res) => {
-    try {
-        res.json(await Movie.find({}));
-    } catch {
-        res.status(500).json({ error: "Error al cargar películas" });
-    }
-});
+// ── Utilidades ────────────────────────────────────────────────────────────────
+const esc = v => String(v ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+const escRx = v => String(v).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+const wrap = fn => (req,res,next) => fn(req,res,next).catch(()=>res.status(500).send("Error interno"));
+const filter = q => q ? {$or:["name","director","review","actors"].map(f=>({[f]:{$regex:escRx(q),$options:"i"}}))} : {};
+const html = (t,b) => `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${t}</title></head><body>${b}</body></html>`;
 
-// Obtener una película por ID
-app.get("/api/movies/:id", async (req, res) => {
-    try {
-        res.json(await Movie.findById(req.params.id));
-    } catch {
-        res.status(500).json({ error: "Error" });
-    }
-});
-
-// Obtener el usuario actual
-app.get("/api/user", (req, res) => {
-    res.json({ user: req.user });
-});
-
-// 6. MIDDLEWARES DE AUTORIZACIÓN (funciones auxiliares)
-// Verifica si el usuario está logueado
-const isLoggedIn = (req, res, next) =>
-    req.isAuthenticated() ? next() : res.redirect("/login");
-
-// Verifica si el usuario es el autor de la película
-const isAuthor = async (req, res, next) => {
-    try {
-        const movie = await Movie.findById(req.params.id);
-        if (!movie) return res.status(404).send("Película no encontrada");
-        if (req.user?.role === "admin") return next();
-        if (movie.author && movie.author.equals(req.user._id))
-            return next();
-        res.status(403).send("No tienes permisos para modificar esta película");
-    } catch {
-        res.status(500).send("Error");
-    }
+const card = (m, u, w=250) => {
+    const can = u && (u.role==="admin" || String(m.author)===String(u._id));
+    return `<div>
+        ${m.image?`<img src="${esc(m.image)}" alt="${esc(m.name)}">`:""}
+        <h3>${esc(m.name)}</h3><p><b>Año:</b> ${esc(m.year)}</p><p><b>Director:</b> ${esc(m.director)}</p>
+        ${m.review?`<p><b>Reseña:</b> ${esc(m.review)}</p>`:""}
+        <p><a href="/movie/${m._id}">Ver detalle</a></p>
+        ${can?`<p><a href="/movies/${m._id}/edit">Editar</a></p>
+        <form action="/movies/${m._id}/delete" method="POST">
+        <button type="submit" onclick="return confirm('¿Eliminar esta película?')">Eliminar</button></form>`:""}
+    </div>`;
 };
 
-// Valida que la reseña no tenga más de 100 palabras
-const validateReview = (review) =>
-    !review || review.trim().split(/\s+/).length <= 100;
+const grid = ms => ms.length ? `<div>${ms}</div>` : "<p>No se encontraron películas.</p>";
+const nav = (...links) => `<a href="/">Inicio</a> | <a href="/logout">Cerrar sesión</a> ${links.map(([t,h])=>`| <a href="${h}">${t}</a>`).join("")}`;
+const searchForm = (action,q) => `<form method="GET" action="${action}">
+    <input type="text" name="q" value="${esc(q)}" placeholder="Buscar...">
+    <button>Buscar</button>${q?`<a href="${action}">Limpiar</a>`:""}
+    </form>`;
+const movieBody = b => ({ name:b.name, year:b.year, director:b.director, review:b.review, image:b.image,
+    actors: b.actors ? b.actors.split(",").map(a=>a.trim()) : [] });
 
-// Escapa texto para usarlo como regex segura en búsquedas
-const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-// 7. RUTAS DE PELÍCULAS (páginas HTML)
-// Ver todas las películas
-app.get("/movies", isLoggedIn, async (req, res) => {
-    try {
-        const search = String(req.query.q ?? "").trim();
-        const searchFilter = search
-            ? {
-                $or: [
-                    { name: { $regex: escapeRegex(search), $options: "i" } },
-                    { director: { $regex: escapeRegex(search), $options: "i" } },
-                    { review: { $regex: escapeRegex(search), $options: "i" } },
-                    { actors: { $regex: escapeRegex(search), $options: "i" } }
-                ]
-            }
-            : {};
-
-        const movies = await Movie.find(searchFilter).sort({ _id: -1 });
-
-        const escapeHtml = (value) => String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/\"/g, "&quot;")
-            .replace(/'/g, "&#39;");
-
-        const canManage = (movie) => {
-            if (!req.user) return false;
-            if (req.user.role === "admin") return true;
-            if (!movie.author) return false;
-            return String(movie.author) === String(req.user._id);
-        };
-
-        const moviesHtml = movies.length
-            ? movies.map(movie => `
-                <div style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; width: 250px; text-align: center;">
-                    ${movie.image ? `<img src="${escapeHtml(movie.image)}" alt="${escapeHtml(movie.name)}" style="width: 100%; height: 300px; object-fit: cover; border-radius: 5px; margin-bottom: 10px;">` : ''}
-                    <h3>${escapeHtml(movie.name)}</h3>
-                    <p><strong>Año:</strong> ${escapeHtml(movie.year)}</p>
-                    <p><strong>Director:</strong> ${escapeHtml(movie.director)}</p>
-                    ${movie.review ? `<p><strong>Reseña:</strong> ${escapeHtml(movie.review)}</p>` : ''}
-                    <p><a href="/movie/${movie._id}">Ver detalle</a></p>
-                    ${canManage(movie) ? `<p><a href="/movies/${movie._id}/edit">Editar</a></p>` : ''}
-                    ${canManage(movie) ? `<form action="/movies/${movie._id}/delete" method="POST" style="margin-top: 8px;"><button type="submit" style="background-color: red; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Eliminar</button></form>` : ''}
-                </div>
-            `).join('')
-            : '<p>No se encontraron películas.</p>';
-
-        res.send(`<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Películas</title>
-</head>
-<body>
-    <h1>Películas</h1>
-    <a href="/">Volver al inicio</a>
-    <a href="/mis-peliculas" style="margin-left: 10px;">Mis películas</a>
-    <a href="/movies/new" style="margin-left: 10px;">Agregar película</a>
-    <a href="/logout" style="margin-left: 10px;">Cerrar sesión</a>
-    <form method="GET" action="/movies" style="margin-top: 15px;">
-        <input type="text" name="q" value="${escapeHtml(search)}" placeholder="Buscar por nombre, director, actor..." style="padding: 8px; width: 280px;">
-        <button type="submit" style="padding: 8px 12px;">Buscar</button>
-        ${search ? `<a href="/movies" style="margin-left: 8px;">Limpiar</a>` : ''}
-    </form>
-    <div style="display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px;">
-        ${moviesHtml}
-    </div>
-</body>
-</html>`);
-    } catch {
-        res.status(500).send("Error al cargar películas");
-    }
+// ── Middlewares ───────────────────────────────────────────────────────────────
+const isLoggedIn = (req,res,next) => req.isAuthenticated() ? next() : res.redirect("/login");
+const isAuthor = wrap(async(req,res,next) => {
+    const m = await Movie.findById(req.params.id);
+    if (!m) return res.status(404).send("Película no encontrada");
+    if (req.user?.role==="admin" || m.author?.equals(req.user._id)) return next();
+    res.status(403).send("Sin permisos");
 });
 
-// Ver películas creadas por el usuario en sesión
-app.get("/mis-peliculas", isLoggedIn, async (req, res) => {
-    try {
-        const search = String(req.query.q ?? "").trim();
-        const searchFilter = search
-            ? {
-                $or: [
-                    { name: { $regex: escapeRegex(search), $options: "i" } },
-                    { director: { $regex: escapeRegex(search), $options: "i" } },
-                    { review: { $regex: escapeRegex(search), $options: "i" } },
-                    { actors: { $regex: escapeRegex(search), $options: "i" } }
-                ]
-            }
-            : {};
+// ── APIs ──────────────────────────────────────────────────────────────────────
+app.get("/api/movies",     wrap(async(req,res)=>res.json(await Movie.find({}))));
+app.get("/api/movies/:id", wrap(async(req,res)=>res.json(await Movie.findById(req.params.id))));
+app.get("/api/user", (req,res)=>res.json({user:req.user}));
 
-        const moviesFilter = req.user?.role === "admin"
-            ? searchFilter
-            : (search
-                ? { $and: [{ author: req.user._id }, searchFilter] }
-                : { author: req.user._id });
-
-        const movies = await Movie.find(moviesFilter).sort({ _id: -1 });
-
-        const escapeHtml = (value) => String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/\"/g, "&quot;")
-            .replace(/'/g, "&#39;");
-
-        const canManage = (movie) => {
-            if (!req.user) return false;
-            if (req.user.role === "admin") return true;
-            if (!movie.author) return false;
-            return String(movie.author) === String(req.user._id);
-        };
-
-        const myMoviesHtml = movies.length
-            ? movies.map(movie => `
-                <div style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; width: 260px; text-align: center;">
-                    ${movie.image ? `<img src="${escapeHtml(movie.image)}" alt="${escapeHtml(movie.name)}" style="width: 100%; height: 300px; object-fit: cover; border-radius: 5px; margin-bottom: 10px;">` : ''}
-                    <h3>${escapeHtml(movie.name)}</h3>
-                    <p><strong>Año:</strong> ${escapeHtml(movie.year)}</p>
-                    <p><strong>Director:</strong> ${escapeHtml(movie.director)}</p>
-                    ${movie.review ? `<p><strong>Reseña:</strong> ${escapeHtml(movie.review)}</p>` : ''}
-                    <p><a href="/movie/${movie._id}">Ver detalle</a></p>
-                    ${canManage(movie) ? `<p><a href="/movies/${movie._id}/edit">Editar</a></p>` : ''}
-                    ${canManage(movie) ? `<form action="/movies/${movie._id}/delete" method="POST" style="margin-top: 8px;"><button type="submit" style="background-color: red; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">Eliminar</button></form>` : ''}
-                </div>
-            `).join('')
-            : '<p>No se encontraron películas.</p>';
-
-        res.send(`<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mis películas</title>
-</head>
-<body>
-    <h1>${req.user?.role === "admin" ? "Gestión de películas (Admin)" : "Mis películas"}</h1>
-    <a href="/">Volver al inicio</a>
-    <a href="/movies" style="margin-left: 10px;">Ver todas</a>
-    <a href="/movies/new" style="margin-left: 10px;">Agregar película</a>
-    <a href="/logout" style="margin-left: 10px;">Cerrar sesión</a>
-    <form method="GET" action="/mis-peliculas" style="margin-top: 15px;">
-        <input type="text" name="q" value="${escapeHtml(search)}" placeholder="Buscar por nombre, director, actor..." style="padding: 8px; width: 280px;">
-        <button type="submit" style="padding: 8px 12px;">Buscar</button>
-        ${search ? `<a href="/mis-peliculas" style="margin-left: 8px;">Limpiar</a>` : ''}
-    </form>
-    <div style="display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px;">
-        ${myMoviesHtml}
-    </div>
-</body>
-</html>`);
-    } catch {
-        res.status(500).send("Error al cargar tus películas");
-    }
-});
-
-// Formulario para crear nueva película
-app.get("/movies/new", isLoggedIn, (req, res) =>
-    res.sendFile(path.join(__dirname, "pelicula", "new.html")));
-
-// Crear una nueva película
-app.post("/movies", isLoggedIn, async (req, res) => {
-    try {
-        if (!validateReview(req.body.review))
-            return res.status(400).send("La reseña no puede tener más de 100 palabras.");
-
-        await Movie.create({
-            name: req.body.name,
-            year: req.body.year,
-            director: req.body.director,
-            review: req.body.review,
-            actors: req.body.actors ? req.body.actors.split(",").map(a => a.trim()) : [],
-            image: req.body.image,
-            author: req.user._id  // Asigna el autor automáticamente
-        });
-        res.redirect("/movies");
-    } catch {
-        res.status(400).send("Error al guardar la película");
-    }
-});
-
-// Formulario para editar película
-app.get("/movies/:id/edit", isLoggedIn, isAuthor, (req, res) =>
-    res.sendFile(path.join(__dirname, "pelicula", "edit.html")));
-
-// Actualizar una película existente
-app.post("/movies/:id", isLoggedIn, isAuthor, async (req, res) => {
-    try {
-        if (!validateReview(req.body.review))
-            return res.status(400).send("La reseña no puede tener más de 100 palabras.");
-
-        await Movie.findByIdAndUpdate(req.params.id, {
-            name: req.body.name,
-            year: req.body.year,
-            director: req.body.director,
-            review: req.body.review,
-            actors: req.body.actors ? req.body.actors.split(",").map(a => a.trim()) : [],
-            image: req.body.image
-        });
-        res.redirect("/movies");
-    } catch {
-        res.status(400).send("Error al actualizar la película");
-    }
-});
-
-// Eliminar una película
-app.post("/movies/:id/delete", isLoggedIn, isAuthor, async (req, res) => {
-    try {
-        await Movie.findByIdAndDelete(req.params.id);
-        res.redirect("/movies");
-    } catch {
-        res.status(500).send("Error al eliminar la película");
-    }
-});
-
-// 8. RUTAS DE AUTENTICACIÓN (registro, login, logout)
-// Página de inicio
-app.get("/", async (req, res) => {
-    try {
-        const movies = await Movie.find({}).sort({ _id: -1 }).limit(6);
-
-        const escapeHtml = (value) => String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/\"/g, "&quot;")
-            .replace(/'/g, "&#39;");
-
-        const recentMoviesHtml = movies.length
-            ? `<div style="display: flex; flex-wrap: wrap; gap: 20px;">
-                ${movies.map(movie => `
-                    <div style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; width: 250px; text-align: center;">
-                        ${movie.image ? `<img src="${escapeHtml(movie.image)}" alt="${escapeHtml(movie.name)}" style="width: 100%; height: 300px; object-fit: cover; border-radius: 5px; margin-bottom: 10px;">` : ''}
-                        <h3>${escapeHtml(movie.name)}</h3>
-                        <p><strong>Año:</strong> ${escapeHtml(movie.year)}</p>
-                        <p><strong>Director:</strong> ${escapeHtml(movie.director)}</p>
-                        ${movie.review ? `<p><strong>Reseña:</strong> ${escapeHtml(movie.review)}</p>` : ''}
-                        <p><a href="/movie/${movie._id}">Ver detalle</a></p>
-                    </div>
-                `).join('')}
-            </div>`
-            : '<p>No hay películas recientes.</p>';
-
-        const authLinks = req.user
-            ? `
-                <li><a href="/movies"> Ver todas las películas </a></li>
-                <li><a href="/mis-peliculas"> Mis películas </a></li>
-                <li><a href="/movies/new"> Agregar película </a></li>
-                <li><a href="/logout"> Cerrar sesión </a></li>
-            `
-            : `
-                <li><a href="/register"> Registro </a></li>
-                <li><a href="/login"> Iniciar sesión </a></li>
-            `;
-
-        res.send(`<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal de Noticias y Películas</title>
-</head>
-<body>
-    <h1>Bienvenido al Index</h1>
-    <p>Portal de Noticias y Películas</p>
-
-    <nav>
-        <ul>
-            ${authLinks}
-        </ul>
-    </nav>
-
-    <h2>Películas Recientes</h2>
-    ${recentMoviesHtml}
-</body>
-</html>`);
-    } catch {
-        res.status(500).send("Error al cargar el index");
-    }
-});
-
-// Página de detalle de película
-app.get("/movie/:id", async (req, res) => {
-    try {
-        const movie = await Movie.findById(req.params.id);
-
-        if (!movie) {
-            return res.status(404).send("Película no encontrada");
-        }
-
-        const escapeHtml = (value) => String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/\"/g, "&quot;")
-            .replace(/'/g, "&#39;");
-
-        const actors = Array.isArray(movie.actors) && movie.actors.length
-            ? movie.actors.map(actor => escapeHtml(actor)).join(", ")
-            : "No registrados";
-
-        const imageHtml = movie.image
-            ? `<img src="${escapeHtml(movie.image)}" alt="${escapeHtml(movie.name)}" style="width: 100%; max-height: 450px; object-fit: cover; border-radius: 6px; margin-bottom: 15px;">`
-            : "";
-
-        res.send(`<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detalle de Película</title>
-</head>
-<body>
-    <h1>Detalle de la película</h1>
-    <a href="/">Volver al index</a>
-    <div style="margin-top: 20px;">
-        <div style="border: 1px solid #ccc; border-radius: 8px; padding: 20px; max-width: 700px;">
-            ${imageHtml}
-            <h2>${escapeHtml(movie.name || "Sin nombre")}</h2>
-            <p><strong>Año:</strong> ${escapeHtml(movie.year || "No disponible")}</p>
-            <p><strong>Director:</strong> ${escapeHtml(movie.director || "No disponible")}</p>
-            <p><strong>Reseña:</strong> ${escapeHtml(movie.review || "Sin reseña")}</p>
-            <p><strong>Actores:</strong> ${actors}</p>
-        </div>
-    </div>
-</body>
-</html>`);
-    } catch {
-        res.status(500).send("Error al cargar el detalle de la película");
-    }
-});
-
-// Formulario de registro
-app.get("/register", (req, res) =>
-    res.sendFile(path.join(__dirname, "pelicula", "register.html")));
-
-// Procesar registro de nuevo usuario
-app.post("/register", async (req, res) => {
-    try {
-        const newUser = new User({
-            username: req.body.username,
-            name: req.body.name,
-            email: req.body.email
-        });
-        await User.register(newUser, req.body.password);  // Passport guarda usuario con hash
-        passport.authenticate("local")(req, res, () => res.redirect("/movies")); // Login automático
-    } catch {
-        res.redirect("/register");
-    }
-});
-
-// Formulario de login
-app.get("/login", (req, res) =>
-    res.sendFile(path.join(__dirname, "pelicula", "login.html")));
-
-// Procesar login
-app.post("/login", passport.authenticate("local", {
-    successRedirect: "/",   // Si éxito, va al index
-    failureRedirect: "/login"     // Si falla, vuelve a login
+// ── Películas ─────────────────────────────────────────────────────────────────
+app.get("/movies", isLoggedIn, wrap(async(req,res) => {
+    const q = String(req.query.q??"").trim();
+    const movies = await Movie.find(filter(q)).sort({_id:-1});
+    res.send(html("Películas", `<h1>Películas</h1>
+        ${nav(["Mis películas","/mis-peliculas"],["Agregar","/movies/new"])}
+        ${searchForm("/movies",q)}${grid(movies.map(m=>card(m,req.user)).join(""))}`));
 }));
 
-// Cerrar sesión
-app.get("/logout", (req, res, next) => {
-    req.logout(err => err ? next(err) : res.redirect("/"));
-});
+app.get("/mis-peliculas", isLoggedIn, wrap(async(req,res) => {
+    const q = String(req.query.q??"").trim(), sf = filter(q);
+    const f = req.user?.role==="admin" ? sf : q ? {$and:[{author:req.user._id},sf]} : {author:req.user._id};
+    const movies = await Movie.find(f).sort({_id:-1});
+    const title = req.user?.role==="admin" ? "Gestión (Admin)" : "Mis películas";
+    res.send(html(title, `<h1>${title}</h1>
+        ${nav(["Ver todas","/movies"],["Agregar","/movies/new"])}
+        ${searchForm("/mis-peliculas",q)}${grid(movies.map(m=>card(m,req.user,260)).join(""))}`));
+}));
 
-// 9. INICIAR SERVIDOR
-app.listen(8080, "0.0.0.0", () => {
-    console.log("Servidor corriendo en http://0.0.0.0:8080");
-});
+// Servir formularios estáticos
+const send = f => (req,res) => res.sendFile(path.join(__dirname,"pelicula",f));
+app.get("/movies/new",      isLoggedIn,           send("new.html"));
+app.get("/movies/:id/edit", isLoggedIn, isAuthor, send("edit.html"));
+app.get("/register", send("register.html"));
+app.get("/login",    send("login.html"));
+
+app.post("/movies", isLoggedIn, wrap(async(req,res) => {
+    if (req.body.review?.trim().split(/\s+/).length > 100) return res.status(400).send("Reseña muy larga.");
+    await Movie.create({...movieBody(req.body), author:req.user._id});
+    res.redirect("/movies");
+}));
+
+app.post("/movies/:id", isLoggedIn, isAuthor, wrap(async(req,res) => {
+    if (req.body.review?.trim().split(/\s+/).length > 100) return res.status(400).send("Reseña muy larga.");
+    await Movie.findByIdAndUpdate(req.params.id, movieBody(req.body));
+    res.redirect("/movies");
+}));
+
+app.post("/movies/:id/delete", isLoggedIn, isAuthor, wrap(async(req,res) => {
+    await Movie.findByIdAndDelete(req.params.id);
+    res.redirect("/movies");
+}));
+
+// ── Rutas generales ───────────────────────────────────────────────────────────
+app.get("/", wrap(async(req,res) => {
+    const q = String(req.query.q??"").trim();
+    const movies = await Movie.find(filter(q)).sort({_id:-1});
+    const authLinks = req.user
+        ? `<li><a href="/mis-peliculas">Mis películas</a></li><li><a href="/movies/new">Agregar</a></li><li><a href="/logout">Cerrar sesión</a></li>`
+        : `<li><a href="/register">Registro</a></li><li><a href="/login">Iniciar sesión</a></li>`;
+    res.send(html("Inicio",`<h1>Bienvenido al Index</h1><nav><ul>${authLinks}</ul></nav>
+        ${searchForm("/",q)}<h2>Todas las películas</h2>${grid(movies.map(m=>card(m,req.user)).join(""))}`));
+}));
+
+app.get("/movie/:id", wrap(async(req,res) => {
+    const m = await Movie.findById(req.params.id);
+    if (!m) return res.status(404).send("Película no encontrada");
+    const actors = Array.isArray(m.actors)&&m.actors.length ? m.actors.map(esc).join(", ") : "No registrados";
+    res.send(html("Detalle",`<h1>Detalle</h1><a href="/">Volver</a>
+        <div>${m.image?`<img src="${esc(m.image)}" alt="${esc(m.name)}">`:""}
+        <h2>${esc(m.name)}</h2><p><b>Año:</b> ${esc(m.year)}</p><p><b>Director:</b> ${esc(m.director)}</p>
+        <p><b>Reseña:</b> ${esc(m.review||"Sin reseña")}</p><p><b>Actores:</b> ${actors}</p></div>`));
+}));
+
+app.post("/register", wrap(async(req,res) => {
+    const {username,name,email,password} = req.body;
+    await User.register(new User({username,name,email}), password);
+    passport.authenticate("local")(req,res,()=>res.redirect("/movies"));
+}));
+
+app.post("/login", passport.authenticate("local",{successRedirect:"/",failureRedirect:"/login"}));
+app.get("/logout", (req,res,next) => req.logout(err=>err?next(err):res.redirect("/")));
+
+app.listen(8080,"0.0.0.0",()=>console.log("Servidor en http://0.0.0.0:8080"));
