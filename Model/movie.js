@@ -1,3 +1,5 @@
+// Modelo de peliculas.
+// Define los campos persistidos en MongoDB y refuerza el limite de 100 caracteres.
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 

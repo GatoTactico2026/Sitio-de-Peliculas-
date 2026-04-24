@@ -1,3 +1,5 @@
+// Modelo de usuarios.
+// Usa passport-local-mongoose para autenticacion y limita campos de texto sensibles.
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 // Asegúrate de que esta línea esté así:

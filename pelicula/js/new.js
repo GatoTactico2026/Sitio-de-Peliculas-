@@ -1,3 +1,5 @@
+// Script del formulario de alta de peliculas.
+// Valida entradas antes del envio y crea registros nuevos via fetch hacia /movies.
 function validateForm(data) {
     const blockedPattern = /<\s*\/?\s*script\b|javascript:|on\w+\s*=|<[^>]+>|\$where|\bunion\b\s+\bselect\b|\bdrop\b\s+\btable\b|\binsert\b\s+\binto\b|\bdelete\b\s+\bfrom\b|\bupdate\b\s+\w+\s+\bset\b|--|\/\*|\*\//i;
     for (const key in data) {

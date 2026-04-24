@@ -1,3 +1,6 @@
+// Servidor principal de la aplicacion.
+// Configura Express, MongoDB, Passport, validacion de entradas y todas las rutas.
+// Puntos criticos: normalizeText bloquea contenido sospechoso y limita textos a 100 caracteres.
 const express = require("express"), mongoose = require("mongoose"),
     passport = require("passport"), LocalStrategy = require("passport-local").Strategy,
     session = require("express-session"), path = require("path");

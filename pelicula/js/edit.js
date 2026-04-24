@@ -1,3 +1,5 @@
+// Script del formulario de edicion.
+// Carga los datos actuales, valida contenido sospechoso y envia actualizacion o eliminacion.
 const movieId = window.location.pathname.split('/')[2];
 const movieForm = document.getElementById('movie-form');
 const deleteForm = document.getElementById('delete-form');

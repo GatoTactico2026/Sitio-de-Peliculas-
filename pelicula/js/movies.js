@@ -1,3 +1,5 @@
+// Script del listado autenticado de peliculas.
+// Obtiene el usuario actual y decide si una pelicula puede mostrar enlace de edicion.
 let currentUser = null;
 
 async function loadUser() {

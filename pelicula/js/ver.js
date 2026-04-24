@@ -1,3 +1,5 @@
+// Script de detalle de pelicula.
+// Extrae el id de la URL, consulta la API y renderiza una vista legible de la pelicula.
 function getMovieIdFromPath() {
     const parts = window.location.pathname.split('/').filter(Boolean);
     return parts[parts.length - 1];

@@ -1,6 +1,7 @@
 /**
- * For a detailed explanation regarding each configuration property, visit:
- * https://jestjs.io/docs/configuration
+ * Configuracion base de Jest.
+ * El proyecto aun no tiene pruebas, pero este archivo deja preparada la cobertura y limpieza de mocks.
+ * Referencia completa: https://jestjs.io/docs/configuration
  */
 
 /** @type {import('jest').Config} */

@@ -1,3 +1,5 @@
+// Script de la pagina inicial.
+// Carga las peliculas publicas desde la API y convierte cada tarjeta en acceso al detalle.
 async function loadMovies() {
     try {
         const response = await fetch('/api/movies');
