@@ -4,6 +4,10 @@ const express = require("express"), mongoose = require("mongoose"),
 const User = require("./Model/user"), Movie = require("./Model/movie");
 const app = express();
 
+const MAX_TEXT_LENGTH = 100;
+const scriptPattern = /<\s*\/?\s*script\b|javascript:|on\w+\s*=|<[^>]+>/i;
+const sqlPattern = /\$where|\bunion\b\s+\bselect\b|\bdrop\b\s+\btable\b|\binsert\b\s+\binto\b|\bdelete\b\s+\bfrom\b|\bupdate\b\s+\w+\s+\bset\b|--|\/\*|\*\//i;
+
 mongoose.connect("mongodb://127.0.0.1:27017/moviesDB").catch(console.error);
 
 app.use(
@@ -22,9 +26,36 @@ app.use((req, res, next) => { res.locals.currentUser = req.user; next(); });
 // ── Utilidades ────────────────────────────────────────────────────────────────
 const esc = v => String(v ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 const escRx = v => String(v).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
-const wrap = fn => (req,res,next) => fn(req,res,next).catch(()=>res.status(500).send("Error interno"));
+const wrap = fn => (req,res,next) => fn(req,res,next).catch(err => res.status(err.status || 500).send(err.message || "Error interno"));
 const filter = q => q ? {$or:["name","director","review","actors"].map(f=>({[f]:{$regex:escRx(q),$options:"i"}}))} : {};
 const html = (t,b) => `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${t}</title></head><body>${b}</body></html>`;
+
+const failValidation = message => {
+    const error = new Error(message);
+    error.status = 400;
+    throw error;
+};
+
+const normalizeText = (value, label) => {
+    if (typeof value !== "string") return "";
+    const normalized = value.trim();
+    if (normalized.length > MAX_TEXT_LENGTH) {
+        failValidation(`${label} no puede tener más de ${MAX_TEXT_LENGTH} caracteres.`);
+    }
+    if (scriptPattern.test(normalized)) {
+        failValidation(`${label} contiene contenido no permitido.`);
+    }
+    if (sqlPattern.test(normalized)) {
+        failValidation(`${label} contiene patrones no permitidos.`);
+    }
+    return normalized;
+};
+
+const parseActors = actors => normalizeText(actors, "Actores")
+    .split(",")
+    .map(actor => actor.trim())
+    .filter(Boolean)
+    .map(actor => normalizeText(actor, "Actor"));
 
 const card = (m, u, w=250) => {
     const can = u && (u.role==="admin" || String(m.author)===String(u._id));
@@ -45,8 +76,21 @@ const searchForm = (action,q) => `<form method="GET" action="${action}">
     <input type="text" name="q" value="${esc(q)}" placeholder="Buscar...">
     <button>Buscar</button>${q?`<a href="${action}">Limpiar</a>`:""}
     </form>`;
-const movieBody = b => ({ name:b.name, year:b.year, director:b.director, review:b.review, image:b.image,
-    actors: b.actors ? b.actors.split(",").map(a=>a.trim()) : [] });
+const movieBody = body => ({
+    name: normalizeText(body.name, "Nombre"),
+    year: body.year,
+    director: normalizeText(body.director, "Director"),
+    review: normalizeText(body.review, "Reseña"),
+    image: normalizeText(body.image, "Imagen"),
+    actors: body.actors ? parseActors(body.actors) : []
+});
+
+const userBody = body => ({
+    username: normalizeText(body.username, "Usuario"),
+    name: normalizeText(body.name, "Nombre"),
+    email: normalizeText(body.email, "Correo electrónico"),
+    password: normalizeText(body.password, "Contraseña")
+});
 
 // ── Middlewares ───────────────────────────────────────────────────────────────
 const isLoggedIn = (req,res,next) => req.isAuthenticated() ? next() : res.redirect("/login");
@@ -89,13 +133,11 @@ app.get("/register", send("register.html"));
 app.get("/login",    send("login.html"));
 
 app.post("/movies", isLoggedIn, wrap(async(req,res) => {
-    if (req.body.review?.trim().split(/\s+/).length > 100) return res.status(400).send("Reseña muy larga.");
     await Movie.create({...movieBody(req.body), author:req.user._id});
     res.redirect("/movies");
 }));
 
 app.post("/movies/:id", isLoggedIn, isAuthor, wrap(async(req,res) => {
-    if (req.body.review?.trim().split(/\s+/).length > 100) return res.status(400).send("Reseña muy larga.");
     await Movie.findByIdAndUpdate(req.params.id, movieBody(req.body));
     res.redirect("/movies");
 }));
@@ -127,7 +169,7 @@ app.get("/movie/:id", wrap(async(req,res) => {
 }));
 
 app.post("/register", wrap(async(req,res) => {
-    const {username,name,email,password} = req.body;
+    const { username, name, email, password } = userBody(req.body);
     await User.register(new User({username,name,email}), password);
     passport.authenticate("local")(req,res,()=>res.redirect("/movies"));
 }));

@@ -1,13 +1,19 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
+const limitedString = {
+    type: String,
+    trim: true,
+    maxlength: 100
+};
+
 const movieSchema = new Schema({
-    name: { type: String, required: true },
+    name: { ...limitedString, required: true },
     year: Number,
-    director: String,
-    review: String,
-    actors: [String], // Arreglo de nombres
-    image: String,     // URL de la imagen
+    director: limitedString,
+    review: limitedString,
+    actors: [{ ...limitedString }], // Arreglo de nombres
+    image: limitedString,     // URL de la imagen
     author: { type: Schema.Types.ObjectId, ref: 'User' } // Agregar autor
 });
 

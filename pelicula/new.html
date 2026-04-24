@@ -10,12 +10,12 @@
 <body>
     <h1>Agregar película</h1>
     <form id="movie-form" action="/movies" method="POST">
-        <input type="text" name="name" placeholder="Nombre" required>
+        <input type="text" name="name" placeholder="Nombre" maxlength="100" required>
         <input type="number" name="year" placeholder="Año" required>
-        <input type="text" name="director" placeholder="Director">
-        <textarea name="review" placeholder="Reseña"></textarea>
-        <input type="text" name="actors" placeholder="Actores (separados por comas)">
-        <input type="text" name="image" placeholder="URL de imagen (ej: https://...)">
+        <input type="text" name="director" placeholder="Director" maxlength="100">
+        <textarea name="review" placeholder="Reseña" maxlength="100"></textarea>
+        <input type="text" name="actors" placeholder="Actores (separados por comas)" maxlength="100">
+        <input type="text" name="image" placeholder="URL de imagen (ej: https://...)" maxlength="100">
         <button type="submit">Guardar</button>
     </form>
     <p><a href="/movies">Volver a la lista</a></p>

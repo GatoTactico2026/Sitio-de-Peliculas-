@@ -1,15 +1,17 @@
 function validateForm(data) {
-    if (data.review) {
-        const wordCount = data.review.trim().split(/\s+/).length;
-        if (wordCount > 100) {
-            alert('La reseña no puede tener más de 100 palabras.');
+    const blockedPattern = /<\s*\/?\s*script\b|javascript:|on\w+\s*=|<[^>]+>|\$where|\bunion\b\s+\bselect\b|\bdrop\b\s+\btable\b|\binsert\b\s+\binto\b|\bdelete\b\s+\bfrom\b|\bupdate\b\s+\w+\s+\bset\b|--|\/\*|\*\//i;
+    for (const key in data) {
+        if (typeof data[key] !== 'string') {
+            continue;
+        }
+        data[key] = data[key].trim();
+        if (data[key].length > 100) {
+            alert(`El campo ${key} no puede tener más de 100 caracteres.`);
             return false;
         }
-    }
-    // Sanitize inputs
-    for (let key in data) {
-        if (typeof data[key] === 'string') {
-            data[key] = data[key].trim();
+        if (blockedPattern.test(data[key])) {
+            alert(`El campo ${key} contiene contenido no permitido.`);
+            return false;
         }
     }
     return true;
