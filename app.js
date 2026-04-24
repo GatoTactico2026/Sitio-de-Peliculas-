@@ -89,9 +89,9 @@ const movieBody = body => ({
 });
 
 const userBody = body => ({
-    username: normalizeText(body.username, "Usuario"),
+    username: normalizeText(body.username, "Usuario").toLowerCase(),
     name: normalizeText(body.name, "Nombre"),
-    email: normalizeText(body.email, "Correo electrónico"),
+    email: normalizeText(body.email, "Correo electrónico").toLowerCase(),
     password: normalizeText(body.password, "Contraseña")
 });
 
@@ -177,7 +177,12 @@ app.post("/register", wrap(async(req,res) => {
     passport.authenticate("local")(req,res,()=>res.redirect("/movies"));
 }));
 
-app.post("/login", passport.authenticate("local",{successRedirect:"/",failureRedirect:"/login"}));
+app.post("/login", wrap(async(req,res,next) => {
+    const username = normalizeText(req.body.username, "Usuario");
+    const user = await User.findOne({ username: new RegExp(`^${escRx(username)}$`, "i") }).select("username");
+    req.body.username = user ? user.username : username.toLowerCase();
+    next();
+}), passport.authenticate("local",{successRedirect:"/",failureRedirect:"/login"}));
 app.get("/logout", (req,res,next) => req.logout(err=>err?next(err):res.redirect("/")));
 
 app.listen(8080,"0.0.0.0",()=>console.log("Servidor en http://0.0.0.0:8080"));
