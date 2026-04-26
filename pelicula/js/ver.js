@@ -1,10 +1,12 @@
 // Script de detalle de pelicula.
 // Extrae el id de la URL, consulta la API y renderiza una vista legible de la pelicula.
+// Funciona tanto para rutas /movie/:id como variantes con segmentos extra.
 function getMovieIdFromPath() {
     const parts = window.location.pathname.split('/').filter(Boolean);
     return parts[parts.length - 1];
 }
 
+// Muestra un texto amigable cuando no hay actores capturados.
 function renderActors(actors) {
     if (!actors || actors.length === 0) {
         return '<p><strong>Actores:</strong> No registrados</p>';

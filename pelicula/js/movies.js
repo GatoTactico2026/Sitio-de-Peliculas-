@@ -2,6 +2,7 @@
 // Obtiene el usuario actual y decide si una pelicula puede mostrar enlace de edicion.
 let currentUser = null;
 
+// Consulta el usuario de sesion para decidir permisos en la interfaz.
 async function loadUser() {
     try {
         const response = await fetch('/api/user');
@@ -12,6 +13,7 @@ async function loadUser() {
     }
 }
 
+// Carga catalogo completo y habilita enlace de edicion solo para el autor.
 async function loadMovies() {
     try {
         const response = await fetch('/api/movies');
@@ -51,6 +53,7 @@ function canEdit(movie) {
     return currentUser._id === movie.author.toString();
 }
 
+// Secuencia de inicio para respetar dependencia de permisos.
 async function init() {
     await loadUser();
     await loadMovies();

@@ -18,6 +18,7 @@ async function loadMovies() {
                 `).join('') +
                 '</div>';
 
+            // Cada tarjeta redirige al detalle al hacer click.
             container.querySelectorAll('[data-movie-id]').forEach(card => {
                 card.addEventListener('click', () => {
                     const movieId = card.getAttribute('data-movie-id');

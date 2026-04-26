@@ -3,12 +3,15 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
+// Configuracion comun para campos de texto cortos.
 const limitedString = {
     type: String,
     trim: true,
     maxlength: 100
 };
 
+// Esquema principal de Movie.
+// author referencia al usuario propietario para aplicar permisos de edicion y borrado.
 const movieSchema = new Schema({
     name: { ...limitedString, required: true },
     year: Number,

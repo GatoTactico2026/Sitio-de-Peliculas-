@@ -1,3 +1,5 @@
+// Script para la vista de administracion de usuarios.
+// Permite buscar usuarios y promoverlos a rol admin desde la interfaz.
 function escapeHtml(value) {
     return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -11,6 +13,7 @@ function roleLabel(role) {
     return role === "admin" ? "Admin" : "Usuario";
 }
 
+// Carga usuarios desde la API de administracion con filtro opcional.
 async function loadUsers(query = "") {
     const usersBody = document.getElementById("users-body");
     usersBody.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
@@ -59,4 +62,5 @@ document.getElementById("clear-btn").addEventListener("click", () => {
     loadUsers("");
 });
 
+// Carga inicial al entrar a la vista.
 loadUsers();

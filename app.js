@@ -7,12 +7,15 @@ const express = require("express"), mongoose = require("mongoose"),
 const User = require("./Model/user"), Movie = require("./Model/movie");
 const app = express();
 
+// Limites y patrones globales para sanitizacion de texto.
 const MAX_TEXT_LENGTH = 100;
 const scriptPattern = /<\s*\/?\s*script\b|javascript:|on\w+\s*=|<[^>]+>/i;
 const sqlPattern = /\$where|\bunion\b\s+\bselect\b|\bdrop\b\s+\btable\b|\binsert\b\s+\binto\b|\bdelete\b\s+\bfrom\b|\bupdate\b\s+\w+\s+\bset\b|--|\/\*|\*\//i;
 
+// Conexion local de MongoDB para la base de datos de peliculas.
 mongoose.connect("mongodb://127.0.0.1:27017/moviesDB").catch(console.error);
 
+// Middlewares base de parseo, archivos estaticos y sesion.
 app.use(
     express.urlencoded({ extended: true }), express.json(),
     express.static(path.join(__dirname, "pelicula"), { index: false }),
@@ -27,11 +30,16 @@ passport.deserializeUser(User.deserializeUser());
 app.use((req, res, next) => { res.locals.currentUser = req.user; next(); });
 
 // ── Utilidades ────────────────────────────────────────────────────────────────
+// Escapa texto para evitar XSS en el HTML generado en el servidor.
 const esc = v => String(v ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+// Escapa un texto para usarlo seguro dentro de expresiones regulares.
 const escRx = v => String(v).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+// Wrapper para capturar errores en rutas async y responder con estado util.
 const wrap = fn => (req,res,next) => fn(req,res,next).catch(err => res.status(err.status || 500).send(err.message || "Error interno"));
+// Construye filtro de busqueda por texto en multiples campos.
 const filter = q => q ? {$or:["name","director","review","actors"].map(f=>({[f]:{$regex:escRx(q),$options:"i"}}))} : {};
-const html = (t,b) => `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${t}</title></head><body>${b}</body></html>`;
+// Plantilla HTML base usada por todas las vistas renderizadas desde Express.
+const html = (t,b) => `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${t}</title><link rel="stylesheet" href="/css/site.css"></head><body>${b}</body></html>`;
 
 const failValidation = message => {
     const error = new Error(message);
@@ -60,11 +68,14 @@ const parseActors = actors => normalizeText(actors, "Actores")
     .filter(Boolean)
     .map(actor => normalizeText(actor, "Actor"));
 
+// Formato para mostrar actores aun cuando el dato venga vacio.
 const actorsText = actors => Array.isArray(actors) && actors.length
     ? actors.map(esc).join(", ")
     : "No registrados";
 
-const card = (m, u, w=250) => {
+// Tarjeta reutilizable para listados de peliculas.
+// showActions permite mostrar/ocultar editar/eliminar segun contexto de la vista.
+const card = (m, u, w=250, showActions=false) => {
     const can = u && (u.role==="admin" || String(m.author)===String(u._id));
     return `<div>
         ${m.image?`<img src="${esc(m.image)}" alt="${esc(m.name)}">`:""}
@@ -72,7 +83,7 @@ const card = (m, u, w=250) => {
         <p><b>Actores:</b> ${actorsText(m.actors)}</p>
         ${m.review?`<p><b>Reseña:</b> ${esc(m.review)}</p>`:""}
         <p><a href="/movie/${m._id}">Ver detalle</a></p>
-        ${can?`<p><a href="/movies/${m._id}/edit">Editar</a></p>
+        ${showActions && can?`<p><a href="/movies/${m._id}/edit">Editar</a></p>
         <form action="/movies/${m._id}/delete" method="POST">
         <button type="submit" onclick="return confirm('¿Eliminar esta película?')">Eliminar</button></form>`:""}
     </div>`;
@@ -111,6 +122,7 @@ const isAuthor = wrap(async(req,res,next) => {
 });
 
 // ── APIs ──────────────────────────────────────────────────────────────────────
+// Endpoints JSON usados por scripts del frontend.
 app.get("/api/movies",     wrap(async(req,res)=>res.json(await Movie.find({}))));
 app.get("/api/movies/:id", wrap(async(req,res)=>res.json(await Movie.findById(req.params.id))));
 app.get("/api/user", (req,res)=>res.json({user:req.user}));
@@ -122,6 +134,7 @@ app.get("/api/admin/users", isLoggedIn, isAdmin, wrap(async(req,res) => {
 }));
 
 // ── Películas ─────────────────────────────────────────────────────────────────
+// Catalogo general autenticado. No muestra acciones de edicion/borrado.
 app.get("/movies", isLoggedIn, wrap(async(req,res) => {
     const q = String(req.query.q??"").trim();
     const movies = await Movie.find(filter(q)).sort({_id:-1});
@@ -131,6 +144,7 @@ app.get("/movies", isLoggedIn, wrap(async(req,res) => {
         ${searchForm("/movies",q)}${grid(movies.map(m=>card(m,req.user)).join(""))}`));
 }));
 
+// Vista de gestion propia (o total si es admin) con acciones habilitadas.
 app.get("/mis-peliculas", isLoggedIn, wrap(async(req,res) => {
     const q = String(req.query.q??"").trim(), sf = filter(q);
     const f = req.user?.role==="admin" ? sf : q ? {$and:[{author:req.user._id},sf]} : {author:req.user._id};
@@ -139,7 +153,7 @@ app.get("/mis-peliculas", isLoggedIn, wrap(async(req,res) => {
     const adminLinks = req.user?.role === "admin" ? [["Administrar usuarios","/admin/users"]] : [];
     res.send(html(title, `<h1>${title}</h1>
         ${nav(["Ver todas","/movies"],["Agregar","/movies/new"], ...adminLinks)}
-        ${searchForm("/mis-peliculas",q)}${grid(movies.map(m=>card(m,req.user,260)).join(""))}`));
+        ${searchForm("/mis-peliculas",q)}${grid(movies.map(m=>card(m,req.user,260,true)).join(""))}`));
 }));
 
 // Servir formularios estáticos
@@ -150,8 +164,10 @@ app.get("/register", send("register.html"));
 app.get("/login",    send("login.html"));
 
 // ── Administración ────────────────────────────────────────────────────────────
+// Vista de promocion de usuarios a admin.
 app.get("/admin/users", isLoggedIn, isAdmin, send("admin-users.html"));
 
+// Promueve a admin por nombre de usuario (formulario HTML simple).
 app.post("/admin/users/make-admin", isLoggedIn, isAdmin, wrap(async(req,res) => {
     const username = normalizeText(req.body.username, "Usuario");
     const user = await User.findOne({ username: new RegExp(`^${escRx(username)}$`, "i") });
@@ -166,6 +182,7 @@ app.post("/admin/users/:id/make-admin", isLoggedIn, isAdmin, wrap(async(req,res)
     res.redirect("/admin/users");
 }));
 
+// Alta de peliculas asociando siempre el autor autenticado.
 app.post("/movies", isLoggedIn, wrap(async(req,res) => {
     await Movie.create({...movieBody(req.body), author:req.user._id});
     res.redirect("/movies");
@@ -208,6 +225,7 @@ app.post("/register", wrap(async(req,res) => {
     passport.authenticate("local")(req,res,()=>res.redirect("/movies"));
 }));
 
+// Login tolerante a mayusculas/minusculas para el username.
 app.post("/login", wrap(async(req,res,next) => {
     const username = normalizeText(req.body.username, "Usuario");
     const user = await User.findOne({ username: new RegExp(`^${escRx(username)}$`, "i") }).select("username");
@@ -216,4 +234,5 @@ app.post("/login", wrap(async(req,res,next) => {
 }), passport.authenticate("local",{successRedirect:"/",failureRedirect:"/login"}));
 app.get("/logout", (req,res,next) => req.logout(err=>err?next(err):res.redirect("/")));
 
+// Escucha en 0.0.0.0 para permitir acceso por IP en red local.
 app.listen(8080,"0.0.0.0",()=>console.log("Servidor en http://0.0.0.0:8080"));
