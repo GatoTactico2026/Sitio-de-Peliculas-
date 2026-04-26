@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administrar usuarios</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+
+<body>
+    <h1>Administrar usuarios</h1>
+    <p>
+        <a href="/movies">Peliculas</a> |
+        <a href="/mis-peliculas">Mis peliculas</a> |
+        <a href="/logout">Cerrar sesion</a>
+    </p>
+
+    <p>Promover usuario a administrador</p>
+    <form action="/admin/users/make-admin" method="POST">
+        <input type="text" name="username" placeholder="Nombre de usuario" maxlength="100" required>
+        <button type="submit">Hacer admin</button>
+    </form>
+
+    <p class="note">Nota: escribe el usuario exactamente como fue registrado.</p>
+</body>
+
+</html>

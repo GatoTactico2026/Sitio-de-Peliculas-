@@ -60,11 +60,16 @@ const parseActors = actors => normalizeText(actors, "Actores")
     .filter(Boolean)
     .map(actor => normalizeText(actor, "Actor"));
 
+const actorsText = actors => Array.isArray(actors) && actors.length
+    ? actors.map(esc).join(", ")
+    : "No registrados";
+
 const card = (m, u, w=250) => {
     const can = u && (u.role==="admin" || String(m.author)===String(u._id));
     return `<div>
         ${m.image?`<img src="${esc(m.image)}" alt="${esc(m.name)}">`:""}
         <h3>${esc(m.name)}</h3><p><b>Año:</b> ${esc(m.year)}</p><p><b>Director:</b> ${esc(m.director)}</p>
+        <p><b>Actores:</b> ${actorsText(m.actors)}</p>
         ${m.review?`<p><b>Reseña:</b> ${esc(m.review)}</p>`:""}
         <p><a href="/movie/${m._id}">Ver detalle</a></p>
         ${can?`<p><a href="/movies/${m._id}/edit">Editar</a></p>
@@ -97,6 +102,7 @@ const userBody = body => ({
 
 // ── Middlewares ───────────────────────────────────────────────────────────────
 const isLoggedIn = (req,res,next) => req.isAuthenticated() ? next() : res.redirect("/login");
+const isAdmin = (req,res,next) => req.user?.role === "admin" ? next() : res.status(403).send("Solo admin");
 const isAuthor = wrap(async(req,res,next) => {
     const m = await Movie.findById(req.params.id);
     if (!m) return res.status(404).send("Película no encontrada");
@@ -108,13 +114,20 @@ const isAuthor = wrap(async(req,res,next) => {
 app.get("/api/movies",     wrap(async(req,res)=>res.json(await Movie.find({}))));
 app.get("/api/movies/:id", wrap(async(req,res)=>res.json(await Movie.findById(req.params.id))));
 app.get("/api/user", (req,res)=>res.json({user:req.user}));
+app.get("/api/admin/users", isLoggedIn, isAdmin, wrap(async(req,res) => {
+    const q = String(req.query.q ?? "").trim();
+    const query = q ? { username: { $regex: escRx(q), $options: "i" } } : {};
+    const users = await User.find(query).select("username name email role").sort({ username: 1 });
+    res.json(users);
+}));
 
 // ── Películas ─────────────────────────────────────────────────────────────────
 app.get("/movies", isLoggedIn, wrap(async(req,res) => {
     const q = String(req.query.q??"").trim();
     const movies = await Movie.find(filter(q)).sort({_id:-1});
+    const adminLinks = req.user?.role === "admin" ? [["Administrar usuarios","/admin/users"]] : [];
     res.send(html("Películas", `<h1>Películas</h1>
-        ${nav(["Mis películas","/mis-peliculas"],["Agregar","/movies/new"])}
+        ${nav(["Mis películas","/mis-peliculas"],["Agregar","/movies/new"], ...adminLinks)}
         ${searchForm("/movies",q)}${grid(movies.map(m=>card(m,req.user)).join(""))}`));
 }));
 
@@ -123,8 +136,9 @@ app.get("/mis-peliculas", isLoggedIn, wrap(async(req,res) => {
     const f = req.user?.role==="admin" ? sf : q ? {$and:[{author:req.user._id},sf]} : {author:req.user._id};
     const movies = await Movie.find(f).sort({_id:-1});
     const title = req.user?.role==="admin" ? "Gestión (Admin)" : "Mis películas";
+    const adminLinks = req.user?.role === "admin" ? [["Administrar usuarios","/admin/users"]] : [];
     res.send(html(title, `<h1>${title}</h1>
-        ${nav(["Ver todas","/movies"],["Agregar","/movies/new"])}
+        ${nav(["Ver todas","/movies"],["Agregar","/movies/new"], ...adminLinks)}
         ${searchForm("/mis-peliculas",q)}${grid(movies.map(m=>card(m,req.user,260)).join(""))}`));
 }));
 
@@ -134,6 +148,23 @@ app.get("/movies/new",      isLoggedIn,           send("new.html"));
 app.get("/movies/:id/edit", isLoggedIn, isAuthor, send("edit.html"));
 app.get("/register", send("register.html"));
 app.get("/login",    send("login.html"));
+
+// ── Administración ────────────────────────────────────────────────────────────
+app.get("/admin/users", isLoggedIn, isAdmin, send("admin-users.html"));
+
+app.post("/admin/users/make-admin", isLoggedIn, isAdmin, wrap(async(req,res) => {
+    const username = normalizeText(req.body.username, "Usuario");
+    const user = await User.findOne({ username: new RegExp(`^${escRx(username)}$`, "i") });
+    if (!user) return res.status(404).send("Usuario no encontrado");
+    user.role = "admin";
+    await user.save();
+    res.redirect("/admin/users");
+}));
+
+app.post("/admin/users/:id/make-admin", isLoggedIn, isAdmin, wrap(async(req,res) => {
+    await User.findByIdAndUpdate(req.params.id, { role: "admin" });
+    res.redirect("/admin/users");
+}));
 
 app.post("/movies", isLoggedIn, wrap(async(req,res) => {
     await Movie.create({...movieBody(req.body), author:req.user._id});
@@ -155,7 +186,7 @@ app.get("/", wrap(async(req,res) => {
     const q = String(req.query.q??"").trim();
     const movies = await Movie.find(filter(q)).sort({_id:-1});
     const authLinks = req.user
-        ? `<li><a href="/mis-peliculas">Mis películas</a></li><li><a href="/movies/new">Agregar</a></li><li><a href="/logout">Cerrar sesión</a></li>`
+        ? `<li><a href="/mis-peliculas">Mis películas</a></li><li><a href="/movies/new">Agregar</a></li>${req.user.role==="admin" ? '<li><a href="/admin/users">Administrar usuarios</a></li>' : ""}<li><a href="/logout">Cerrar sesión</a></li>`
         : `<li><a href="/register">Registro</a></li><li><a href="/login">Iniciar sesión</a></li>`;
     res.send(html("Inicio",`<h1>Bienvenido al Index</h1><nav><ul>${authLinks}</ul></nav>
         ${searchForm("/",q)}<h2>Todas las películas</h2>${grid(movies.map(m=>card(m,req.user)).join(""))}`));

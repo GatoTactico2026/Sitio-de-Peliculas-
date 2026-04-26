@@ -1,0 +1,153 @@
+:root {
+    --bg: #f3f6fb;
+    --card: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --primary: #0f766e;
+    --primary-hover: #0d5f58;
+    --danger: #b91c1c;
+    --danger-hover: #991b1b;
+    --border: #d1d5db;
+    --shadow: 0 10px 30px rgba(2, 8, 23, 0.08);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+    color: var(--text);
+    background:
+        radial-gradient(circle at 10% 10%, rgba(15, 118, 110, 0.12), transparent 40%),
+        radial-gradient(circle at 90% 20%, rgba(37, 99, 235, 0.1), transparent 45%),
+        var(--bg);
+    padding: 28px 16px;
+}
+
+h1, h2, h3 {
+    margin: 0 0 12px;
+    color: #0b1324;
+}
+
+p {
+    margin: 0 0 14px;
+}
+
+a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+nav ul {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+nav li {
+    margin: 0;
+}
+
+form {
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    border-radius: 14px;
+    padding: 16px;
+    margin: 0 0 16px;
+    max-width: 640px;
+}
+
+input,
+textarea,
+button {
+    font: inherit;
+}
+
+input,
+textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin: 0 0 10px;
+    background: #fff;
+}
+
+input:focus,
+textarea:focus {
+    outline: 2px solid rgba(15, 118, 110, 0.2);
+    border-color: var(--primary);
+}
+
+textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+button {
+    border: 0;
+    border-radius: 10px;
+    background: var(--primary);
+    color: #fff;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-weight: 700;
+}
+
+button:hover {
+    background: var(--primary-hover);
+}
+
+.danger-btn {
+    background: var(--danger);
+}
+
+.danger-btn:hover {
+    background: var(--danger-hover);
+}
+
+#movies-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 14px;
+}
+
+.note {
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.top-links {
+    margin-bottom: 14px;
+}
+
+@media (max-width: 640px) {
+    body {
+        padding: 18px 12px;
+    }
+
+    form {
+        padding: 12px;
+    }
+}
