@@ -3,13 +3,21 @@
 // Repite reglas del backend para ofrecer retroalimentacion inmediata al usuario.
 function validateForm(data) {
     const blockedPattern = /<\s*\/?\s*script\b|javascript:|on\w+\s*=|<[^>]+>|\$where|\bunion\b\s+\bselect\b|\bdrop\b\s+\btable\b|\binsert\b\s+\binto\b|\bdelete\b\s+\bfrom\b|\bupdate\b\s+\w+\s+\bset\b|--|\/\*|\*\//i;
+    const maxTextLength = 100;
+    const maxReviewWords = 200;
     for (const key in data) {
         if (typeof data[key] !== 'string') {
             continue;
         }
         data[key] = data[key].trim();
-        if (data[key].length > 100) {
-            alert(`El campo ${key} no puede tener más de 100 caracteres.`);
+        if (key === 'review') {
+            const reviewWords = data[key].split(/\s+/).filter(Boolean).length;
+            if (reviewWords > maxReviewWords) {
+                alert(`El campo ${key} no puede tener más de ${maxReviewWords} palabras.`);
+                return false;
+            }
+        } else if (data[key].length > maxTextLength) {
+            alert(`El campo ${key} no puede tener más de ${maxTextLength} caracteres.`);
             return false;
         }
         if (blockedPattern.test(data[key])) {
