@@ -1,6 +1,6 @@
 // Servidor principal de la aplicacion.
 // Configura Express, MongoDB, Passport, validacion de entradas y todas las rutas.
-// Puntos criticos: normalizeText bloquea contenido sospechoso y limita textos a 100 caracteres.
+// Puntos criticos: normalizeText bloquea contenido sospechoso; la reseña permite hasta 200 palabras.
 const express = require("express"), mongoose = require("mongoose"),
     passport = require("passport"), LocalStrategy = require("passport-local").Strategy,
     session = require("express-session"), path = require("path");
@@ -9,6 +9,7 @@ const app = express();
 
 // Limites y patrones globales para sanitizacion de texto.
 const MAX_TEXT_LENGTH = 100;
+const MAX_REVIEW_WORDS = 200;
 const scriptPattern = /<\s*\/?\s*script\b|javascript:|on\w+\s*=|<[^>]+>/i;
 const sqlPattern = /\$where|\bunion\b\s+\bselect\b|\bdrop\b\s+\btable\b|\binsert\b\s+\binto\b|\bdelete\b\s+\bfrom\b|\bupdate\b\s+\w+\s+\bset\b|--|\/\*|\*\//i;
 
@@ -62,6 +63,15 @@ const normalizeText = (value, label) => {
     return normalized;
 };
 
+const normalizeReview = value => {
+    const normalized = normalizeText(value, "Reseña");
+    const words = normalized.split(/\s+/).filter(Boolean);
+    if (words.length > MAX_REVIEW_WORDS) {
+        failValidation(`Reseña no puede tener más de ${MAX_REVIEW_WORDS} palabras.`);
+    }
+    return normalized;
+};
+
 const parseActors = actors => normalizeText(actors, "Actores")
     .split(",")
     .map(actor => actor.trim())
@@ -99,7 +109,7 @@ const movieBody = body => ({
     name: normalizeText(body.name, "Nombre"),
     year: body.year,
     director: normalizeText(body.director, "Director"),
-    review: normalizeText(body.review, "Reseña"),
+    review: normalizeReview(body.review),
     image: normalizeText(body.image, "Imagen"),
     actors: body.actors ? parseActors(body.actors) : []
 });
