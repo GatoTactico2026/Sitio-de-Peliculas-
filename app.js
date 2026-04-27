@@ -64,7 +64,14 @@ const normalizeText = (value, label) => {
 };
 
 const normalizeReview = value => {
-    const normalized = normalizeText(value, "Reseña");
+    if (typeof value !== "string") return "";
+    const normalized = value.trim();
+    if (scriptPattern.test(normalized)) {
+        failValidation("Reseña contiene contenido no permitido.");
+    }
+    if (sqlPattern.test(normalized)) {
+        failValidation("Reseña contiene patrones no permitidos.");
+    }
     const words = normalized.split(/\s+/).filter(Boolean);
     if (words.length > MAX_REVIEW_WORDS) {
         failValidation(`Reseña no puede tener más de ${MAX_REVIEW_WORDS} palabras.`);
