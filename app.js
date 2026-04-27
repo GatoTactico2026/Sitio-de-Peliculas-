@@ -77,19 +77,19 @@ const actorsText = actors => Array.isArray(actors) && actors.length
 // showActions permite mostrar/ocultar editar/eliminar segun contexto de la vista.
 const card = (m, u, w=250, showActions=false) => {
     const can = u && (u.role==="admin" || String(m.author)===String(u._id));
-    return `<div>
-        ${m.image?`<img src="${esc(m.image)}" alt="${esc(m.name)}">`:""}
+    return `<div class="card">
+        ${m.image?`<img src="${esc(m.image)}" alt="${esc(m.name)}" style="width:100%;height:300px;object-fit:cover;border-radius:8px;margin-bottom:12px;">`:""}
         <h3>${esc(m.name)}</h3><p><b>Año:</b> ${esc(m.year)}</p><p><b>Director:</b> ${esc(m.director)}</p>
         <p><b>Actores:</b> ${actorsText(m.actors)}</p>
         ${m.review?`<p><b>Reseña:</b> ${esc(m.review)}</p>`:""}
         <p><a href="/movie/${m._id}">Ver detalle</a></p>
-        ${showActions && can?`<p><a href="/movies/${m._id}/edit">Editar</a></p>
-        <form action="/movies/${m._id}/delete" method="POST">
-        <button type="submit" onclick="return confirm('¿Eliminar esta película?')">Eliminar</button></form>`:""}
+        ${showActions && can?`<div class="card-actions"><a href="/movies/${m._id}/edit">Editar</a>
+        <form action="/movies/${m._id}/delete" method="POST" style="margin:0;padding:0;border:none;box-shadow:none;">
+        <button type="submit" class="danger-btn" onclick="return confirm('¿Eliminar esta película?')">Eliminar</button></form></div>`:""}
     </div>`;
 };
 
-const grid = ms => ms.length ? `<div>${ms}</div>` : "<p>No se encontraron películas.</p>";
+const grid = ms => ms.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px;margin-top:24px;">${ms}</div>` : "<p>No se encontraron películas.</p>";
 const nav = (...links) => `<a href="/">Inicio</a> | <a href="/logout">Cerrar sesión</a> ${links.map(([t,h])=>`| <a href="${h}">${t}</a>`).join("")}`;
 const searchForm = (action,q) => `<form method="GET" action="${action}">
     <input type="text" name="q" value="${esc(q)}" placeholder="Buscar...">
@@ -205,7 +205,7 @@ app.get("/", wrap(async(req,res) => {
     const authLinks = req.user
         ? `<li><a href="/mis-peliculas">Mis películas</a></li><li><a href="/movies/new">Agregar</a></li>${req.user.role==="admin" ? '<li><a href="/admin/users">Administrar usuarios</a></li>' : ""}<li><a href="/logout">Cerrar sesión</a></li>`
         : `<li><a href="/register">Registro</a></li><li><a href="/login">Iniciar sesión</a></li>`;
-    res.send(html("Inicio",`<h1>Bienvenido al Index</h1><nav><ul>${authLinks}</ul></nav>
+    res.send(html("Inicio",`<h1>Bienvenido a tu sitio de pelicula favoritas</h1><nav><ul>${authLinks}</ul></nav>
         ${searchForm("/",q)}<h2>Todas las películas</h2>${grid(movies.map(m=>card(m,req.user)).join(""))}`));
 }));
 
